@@ -18,49 +18,177 @@ struct Args {
 /*~~~~~~~~~~~~~~~~~~~~~~Instruction Structs~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
 #[derive(Debug)]
 enum Instruction {
-    MovR(MovR),
-    MovIR(MovIR),
+    MovR(RegisterOp),
+    MovIR(Mov_IR),
+    AddRegMemory(RegisterOp),
+    AddImmediateRegister(ImmediateOp),
+    AddImmediateAccumulator(AccumulatorOp),
+    SubRegMemory(RegisterOp),
+    SubImmediateRegister(ImmediateOp),
+    SubImmediateAccumulator(AccumulatorOp),
+    CmpRegMemory(RegisterOp),
+    CmpImmediateRegister(ImmediateOp),
+    CmpImmediateAccumulator(AccumulatorOp),
+    Je(JmpOp),
+    Jl(JmpOp),
+    Jle(JmpOp),
+    Jb(JmpOp),
+    Jbe(JmpOp),
+    Jp(JmpOp),
+    Jo(JmpOp),
+    Js(JmpOp),
+    Jne(JmpOp),
+    Jnl(JmpOp),
+    Jg(JmpOp),
+    Jnb(JmpOp),
+    Ja(JmpOp),
+    Jnp(JmpOp),
+    Jno(JmpOp),
+    Jns(JmpOp),
+    Loop(JmpOp),
+    Loopz(JmpOp),
+    Loopnz(JmpOp),
+    Jcxz(JmpOp),
 }
 
 impl Display for Instruction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        use Instruction::*;
         match self {
-            Instruction::MovR(mov_r) => {
-                if mov_r.direction {
-                    write!(f, "mov {}, {}", mov_r.register, mov_r.register_memory)?;
-                    if let Some(disp) = mov_r.displacement {
-                        if disp != 0 {
-                            write!(f, "+ {disp}]")
-                        } else {
-                            write!(f, "]")
-                        }
-                    } else {
-                        write!(f, "]")
-                    }
-                } else {
-                    write!(f, "mov {}", mov_r.register_memory)?;
-                    if let Some(disp) = mov_r.displacement {
-                        if disp != 0 {
-                            write!(f, "+ {disp}],")?;
-                        } else {
-                            write!(f, "],")?;
-                        }
-                    } else {
-                        write!(f, ",")?;
-                    }
-                    write!(f, " {}", mov_r.register)
-                }
-            }
-            Instruction::MovIR(mov_ir) => {
+            MovR(mov_r) => write_reg_mem("mov", mov_r, f),
+            MovIR(mov_ir) => {
                 write!(f, "mov {}, {}", mov_ir.register, mov_ir.data)
             }
+            AddRegMemory(register_op) => write_reg_mem("add", register_op, f),
+            AddImmediateRegister(immediate_op) => write_immediate_rm("add", immediate_op, f),
+            AddImmediateAccumulator(accumulator_op) => {
+                write_immediate_accumulator("add", accumulator_op, f)
+            }
+            SubRegMemory(register_op) => write_reg_mem("sub", &register_op, f),
+            SubImmediateRegister(immediate_op) => write_immediate_rm("sub", immediate_op, f),
+            SubImmediateAccumulator(accumulator_op) => {
+                write_immediate_accumulator("sub", accumulator_op, f)
+            }
+
+            CmpRegMemory(register_op) => write_reg_mem("cmp", &register_op, f),
+            CmpImmediateRegister(immediate_op) => write_immediate_rm("cmp", immediate_op, f),
+            CmpImmediateAccumulator(accumulator_op) => {
+                write_immediate_accumulator("cmp", accumulator_op, f)
+            }
+            Je(jmp_op) => write_jmp("je", jmp_op, f),
+            Jl(jmp_op) => write_jmp("jl", jmp_op, f),
+            Jle(jmp_op) => write_jmp("jle", jmp_op, f),
+            Jb(jmp_op) => write_jmp("jb", jmp_op, f),
+            Jbe(jmp_op) => write_jmp("jbe", jmp_op, f),
+            Jp(jmp_op) => write_jmp("jp", jmp_op, f),
+            Jo(jmp_op) => write_jmp("jo", jmp_op, f),
+            Js(jmp_op) => write_jmp("js", jmp_op, f),
+            Jne(jmp_op) => write_jmp("jne", jmp_op, f),
+            Jnl(jmp_op) => write_jmp("jnl", jmp_op, f),
+            Jg(jmp_op) => write_jmp("jg", jmp_op, f),
+            Jnb(jmp_op) => write_jmp("jnb", jmp_op, f),
+            Ja(jmp_op) => write_jmp("ja", jmp_op, f),
+            Jnp(jmp_op) => write_jmp("jnp", jmp_op, f),
+            Jno(jmp_op) => write_jmp("jno", jmp_op, f),
+            Jns(jmp_op) => write_jmp("jns", jmp_op, f),
+            Loop(jmp_op) => write_jmp("loop", jmp_op, f),
+            Loopz(jmp_op) => write_jmp("loopz", jmp_op, f),
+            Loopnz(jmp_op) => write_jmp("loopnz", jmp_op, f),
+            Jcxz(jmp_op) => write_jmp("jcxz", jmp_op, f),
         }
     }
 }
 
-#[allow(dead_code)]
+fn write_reg_mem(
+    name: &str,
+    instruction: &RegisterOp,
+    f: &mut std::fmt::Formatter<'_>,
+) -> std::fmt::Result {
+    if instruction.direction {
+        write!(
+            f,
+            "{name} {}, {}",
+            instruction.register, instruction.register_memory
+        )?;
+        if let Some(disp) = instruction.displacement {
+            if disp != 0 {
+                write!(f, "+ {disp}]")
+            } else {
+                write!(f, "]")
+            }
+        } else {
+            write!(f, "]")
+        }
+    } else {
+        write!(f, "{name} {}", instruction.register_memory)?;
+        if let Some(disp) = instruction.displacement {
+            if disp != 0 {
+                write!(f, "+ {disp}],")?;
+            } else {
+                write!(f, "],")?;
+            }
+        } else {
+            write!(f, ",")?;
+        }
+        write!(f, " {}", instruction.register)
+    }
+}
+
+/// These instructions look like `inst [reg_mem + disp], data`.
+fn write_immediate_rm(
+    name: &str,
+    instruction: &ImmediateOp,
+    f: &mut std::fmt::Formatter<'_>,
+) -> std::fmt::Result {
+    let width = match instruction.width {
+        true => "word",
+        false => "byte",
+    };
+    if let Some(disp) = instruction.displacement {
+        if let RegisterMemoryEncoding::DIRECT = instruction.registery_memory {
+            write!(f, "{name} {width} [{disp}], {}", instruction.data)
+        } else {
+            write!(
+                f,
+                "{name} {width} [{} + {}], {} ",
+                instruction.registery_memory, disp, instruction.data
+            )
+        }
+    } else {
+        if let ModMode::Register = instruction.mode {
+            write!(
+                f,
+                "{name} {}, {}",
+                instruction.registery_memory, instruction.data
+            )
+        } else {
+            write!(
+                f,
+                "{name} {width} {}, {}",
+                instruction.registery_memory, instruction.data
+            )
+        }
+    }
+}
+
+fn write_immediate_accumulator(
+    name: &str,
+    instruction: &AccumulatorOp,
+    f: &mut std::fmt::Formatter<'_>,
+) -> std::fmt::Result {
+    if instruction.width {
+        write!(f, "{name} ax, {}", instruction.data)
+    } else {
+        write!(f, "{name} al, {}", instruction.data)
+    }
+}
+
+fn write_jmp(name: &str, instruction: &JmpOp, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    write!(f, "{name} {}", instruction.inc)
+}
+
 #[derive(Debug)]
-struct MovR {
+struct RegisterOp {
     direction: bool,
     word_byte: bool,
     mode: ModMode,
@@ -69,23 +197,46 @@ struct MovR {
     displacement: Option<u16>,
 }
 
-#[allow(dead_code)]
 #[derive(Debug)]
-struct MovIR {
+struct Mov_IR {
     word_byte: bool,
     register: Register,
     data: u16,
+}
+
+// #[allow(dead_code)]
+#[derive(Debug)]
+struct ImmediateOp {
+    sign_extension: bool,
+    width: bool,
+    mode: ModMode,
+    registery_memory: RegisterMemoryEncoding,
+    displacement: Option<u16>,
+    data: u16,
+}
+
+#[derive(Debug)]
+struct AccumulatorOp {
+    width: bool,
+    data: u16,
+}
+
+#[derive(Debug)]
+struct JmpOp {
+    inc: i8,
 }
 
 #[derive(Debug)]
 struct InstructionBuilder {
     opcode: Option<OpCode>,
     direction: Option<bool>,
-    word_byte: Option<bool>,
+    width: Option<bool>,
+    sign_extension: Option<bool>,
     mode: Option<ModMode>,
     register: Option<Register>,
     register_memory: Option<RegisterMemoryEncoding>,
     displacement: Option<[u8; 2]>,
+    data: Option<[u8; 2]>,
 }
 
 impl InstructionBuilder {
@@ -93,36 +244,198 @@ impl InstructionBuilder {
         Self {
             opcode: None,
             direction: None,
-            word_byte: None,
+            width: None,
+            sign_extension: None,
             mode: None,
             register: None,
             register_memory: None,
             displacement: None,
+            data: None,
         }
     }
     pub fn build(self) -> Instruction {
+        use Instruction::*;
         match self.opcode.unwrap() {
-            OpCode::MovR => Instruction::MovR(MovR {
+            OpCode::MovR => MovR(RegisterOp {
                 direction: self.direction.unwrap(),
-                word_byte: self.word_byte.unwrap(),
+                word_byte: self.width.unwrap(),
                 mode: self.mode.unwrap(),
                 register: self.register.unwrap(),
                 register_memory: self.register_memory.unwrap(),
                 displacement: self.displacement.map(u16::from_be_bytes),
             }),
-            OpCode::MovIR => Instruction::MovIR(MovIR {
-                word_byte: self.word_byte.unwrap(),
+            OpCode::MovIR => MovIR(Mov_IR {
+                word_byte: self.width.unwrap(),
                 register: self.register.unwrap(),
-                data: self.displacement.map(u16::from_be_bytes).unwrap(),
+                data: self.data.map(u16::from_be_bytes).unwrap(),
+            }),
+            OpCode::AddRegMemory => AddRegMemory(RegisterOp {
+                direction: self.direction.unwrap(),
+                word_byte: self.width.unwrap(),
+                mode: self.mode.unwrap(),
+                register: self.register.unwrap(),
+                register_memory: self.register_memory.unwrap(),
+                displacement: self.displacement.map(u16::from_be_bytes),
+            }),
+            OpCode::AddSubCmpImmediateRegister => unreachable!(),
+            OpCode::AddImmediateRegister => AddImmediateRegister(ImmediateOp {
+                sign_extension: self.sign_extension.unwrap(),
+                width: self.width.unwrap(),
+                mode: self.mode.unwrap(),
+                registery_memory: self.register_memory.unwrap(),
+                displacement: self.displacement.map(u16::from_be_bytes),
+                data: self.data.map(u16::from_be_bytes).unwrap(),
+            }),
+            OpCode::AddImmediateAccumulator => AddImmediateAccumulator(AccumulatorOp {
+                width: self.width.unwrap(),
+                data: self.data.map(u16::from_be_bytes).unwrap(),
+            }),
+            OpCode::SubRegMemory => SubRegMemory(RegisterOp {
+                direction: self.direction.unwrap(),
+                word_byte: self.width.unwrap(),
+                mode: self.mode.unwrap(),
+                register: self.register.unwrap(),
+                register_memory: self.register_memory.unwrap(),
+                displacement: self.displacement.map(u16::from_be_bytes),
+            }),
+            OpCode::SubImmediateRegister => SubImmediateRegister(ImmediateOp {
+                sign_extension: self.sign_extension.unwrap(),
+                width: self.width.unwrap(),
+                mode: self.mode.unwrap(),
+                registery_memory: self.register_memory.unwrap(),
+                displacement: self.displacement.map(u16::from_be_bytes),
+                data: self.data.map(u16::from_be_bytes).unwrap(),
+            }),
+            OpCode::SubImmediateAccumulator => SubImmediateAccumulator(AccumulatorOp {
+                width: self.width.unwrap(),
+                data: self.data.map(u16::from_be_bytes).unwrap(),
+            }),
+            OpCode::CmpRegMemory => CmpRegMemory(RegisterOp {
+                direction: self.direction.unwrap(),
+                word_byte: self.width.unwrap(),
+                mode: self.mode.unwrap(),
+                register: self.register.unwrap(),
+                register_memory: self.register_memory.unwrap(),
+                displacement: self.displacement.map(u16::from_be_bytes),
+            }),
+            OpCode::CmpImmediateRegister => CmpImmediateRegister(ImmediateOp {
+                sign_extension: self.sign_extension.unwrap(),
+                width: self.width.unwrap(),
+                mode: self.mode.unwrap(),
+                registery_memory: self.register_memory.unwrap(),
+                displacement: self.displacement.map(u16::from_be_bytes),
+                data: self.data.map(u16::from_be_bytes).unwrap(),
+            }),
+            OpCode::CmpImmediateAccumulator => CmpImmediateAccumulator(AccumulatorOp {
+                width: self.width.unwrap(),
+                data: self.data.map(u16::from_be_bytes).unwrap(),
+            }),
+            OpCode::Je => Je(JmpOp {
+                inc: self.data.unwrap()[1].cast_signed(),
+            }),
+            OpCode::Jl => Jl(JmpOp {
+                inc: self.data.unwrap()[1].cast_signed(),
+            }),
+            OpCode::Jle => Jle(JmpOp {
+                inc: self.data.unwrap()[1].cast_signed(),
+            }),
+            OpCode::Jb => Jb(JmpOp {
+                inc: self.data.unwrap()[1].cast_signed(),
+            }),
+            OpCode::Jbe => Jbe(JmpOp {
+                inc: self.data.unwrap()[1].cast_signed(),
+            }),
+            OpCode::Jp => Jp(JmpOp {
+                inc: self.data.unwrap()[1].cast_signed(),
+            }),
+            OpCode::Jo => Jo(JmpOp {
+                inc: self.data.unwrap()[1].cast_signed(),
+            }),
+            OpCode::Js => Js(JmpOp {
+                inc: self.data.unwrap()[1].cast_signed(),
+            }),
+            OpCode::Jne => Jne(JmpOp {
+                inc: self.data.unwrap()[1].cast_signed(),
+            }),
+            OpCode::Jnl => Jnl(JmpOp {
+                inc: self.data.unwrap()[1].cast_signed(),
+            }),
+            OpCode::Jg => Jg(JmpOp {
+                inc: self.data.unwrap()[1].cast_signed(),
+            }),
+            OpCode::Jnb => Jnb(JmpOp {
+                inc: self.data.unwrap()[1].cast_signed(),
+            }),
+            OpCode::Ja => Ja(JmpOp {
+                inc: self.data.unwrap()[1].cast_signed(),
+            }),
+            OpCode::Jnp => Jnp(JmpOp {
+                inc: self.data.unwrap()[1].cast_signed(),
+            }),
+            OpCode::Jno => Jno(JmpOp {
+                inc: self.data.unwrap()[1].cast_signed(),
+            }),
+            OpCode::Jns => Jns(JmpOp {
+                inc: self.data.unwrap()[1].cast_signed(),
+            }),
+            OpCode::Loop => Loop(JmpOp {
+                inc: self.data.unwrap()[1].cast_signed(),
+            }),
+            OpCode::Loopz => Loopz(JmpOp {
+                inc: self.data.unwrap()[1].cast_signed(),
+            }),
+            OpCode::Loopnz => Loopnz(JmpOp {
+                inc: self.data.unwrap()[1].cast_signed(),
+            }),
+            OpCode::Jcxz => Jcxz(JmpOp {
+                inc: self.data.unwrap()[1].cast_signed(),
             }),
         }
     }
 }
 
+/*~~~~~~~~~~~~~~~~~~~~~~~~~~~Decode Data Structures~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
+
 #[derive(Debug, Clone, Copy)]
 enum OpCode {
+    // Movs
     MovR,
     MovIR,
+    // Adds
+    AddRegMemory,
+    /// Add, Sub, Cmp to IR are all the same at the first byte.
+    AddSubCmpImmediateRegister,
+    AddImmediateRegister,
+    AddImmediateAccumulator,
+    // Subs
+    SubRegMemory,
+    SubImmediateRegister,
+    SubImmediateAccumulator,
+    // Cmps
+    CmpRegMemory,
+    CmpImmediateRegister,
+    CmpImmediateAccumulator,
+    // Jmps
+    Je,
+    Jl,
+    Jle,
+    Jb,
+    Jbe,
+    Jp,
+    Jo,
+    Js,
+    Jne,
+    Jnl,
+    Jg,
+    Jnb,
+    Ja,
+    Jnp,
+    Jno,
+    Jns,
+    Loop,
+    Loopz,
+    Loopnz,
+    Jcxz,
 }
 
 #[derive(Debug)]
@@ -397,43 +710,44 @@ impl Display for RegisterMemoryEncoding {
     }
 }
 
-/*~~~~~~~~~~~~~~~~~~~~~~~ Process Mov Instructions ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
+/*~~~~~~~~~~~~~~~~~~~~~~~ Process Common Instructions ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
 
-fn process_mov_r_b1(builder: &mut InstructionBuilder, byte: u8) {
-    builder.direction = Some(0b0000_0010 & byte == 2);
-    builder.word_byte = Some(0b0000_0001 & byte == 1);
+fn process_add_sub_cmp_immediate_register_b1(machine: &mut StateMachine, byte: u8) {
+    let builder = machine.current_instruction.as_mut().unwrap();
+    builder.sign_extension = Some(((0b0000_0010 & byte) >> 1) == 1);
+    builder.width = Some(0b0000_0001 & byte == 1);
+    machine.current_state = States::Byte2;
 }
 
-fn process_mov_r_b2(machine: &mut StateMachine, byte: u8) {
+fn process_add_sub_cmp_immediate_register_b2(machine: &mut StateMachine, byte: u8) {
     let builder = machine.current_instruction.as_mut().unwrap();
     builder.mode = Some(ModMode::from_byte(byte));
-    let masked_register = (0b0011_1000 & byte) >> 3;
-    builder.register = Some(Register::from_byte(
-        builder.word_byte.unwrap(),
-        masked_register,
-    ));
+    builder.opcode = Some(match 0b0011_1000 & byte {
+        0b0000_0000 => OpCode::AddImmediateRegister,
+        0b0010_1000 => OpCode::SubImmediateRegister,
+        0b0011_1000 => OpCode::CmpImmediateRegister,
+        _ => unimplemented!("Unimplemented immediate command."),
+    });
     match builder.mode.as_ref().unwrap() {
         ModMode::MemNoDis => {
-            // TODO: Doesn't handle 110 Direct Address
             let masked_byte = 0b0000_0111 & byte;
             builder.register_memory = Some(RegisterMemoryEncoding::from_byte(
                 ModMode::MemNoDis,
-                builder.word_byte.unwrap(),
+                builder.width.unwrap(),
                 masked_byte,
             ));
-            let final_builder = machine
-                .current_instruction
-                .replace(InstructionBuilder::new())
-                .unwrap();
-            let instruction = final_builder.build();
-            machine.instruction_buffer.push(instruction);
-            machine.current_state = States::Byte1;
+            if let Some(RegisterMemoryEncoding::DIRECT) = builder.register_memory {
+                machine.current_state = States::Byte3;
+            } else {
+                // Jump directly to read data in byte 5.
+                machine.current_state = States::Byte5;
+            }
         }
         ModMode::Mem8Dis => {
             let masked_byte = 0b0000_0111 & byte;
             builder.register_memory = Some(RegisterMemoryEncoding::from_byte(
                 ModMode::Mem8Dis,
-                builder.word_byte.unwrap(),
+                builder.width.unwrap(),
                 masked_byte,
             ));
             machine.current_state = States::Byte3;
@@ -442,7 +756,7 @@ fn process_mov_r_b2(machine: &mut StateMachine, byte: u8) {
             let masked_byte = 0b0000_0111 & byte;
             builder.register_memory = Some(RegisterMemoryEncoding::from_byte(
                 ModMode::Mem16Dis,
-                builder.word_byte.unwrap(),
+                builder.width.unwrap(),
                 masked_byte,
             ));
             machine.current_state = States::Byte3;
@@ -451,7 +765,137 @@ fn process_mov_r_b2(machine: &mut StateMachine, byte: u8) {
             let masked_byte = 0b0000_0111 & byte;
             builder.register_memory = Some(RegisterMemoryEncoding::from_byte(
                 ModMode::Register,
-                builder.word_byte.unwrap(),
+                builder.width.unwrap(),
+                masked_byte,
+            ));
+            // Jump directly to read data in byte 5.
+            machine.current_state = States::Byte5;
+        }
+    }
+}
+
+fn process_add_sub_cmp_immediate_register_b3(machine: &mut StateMachine, byte: u8) {
+    let builder = machine.current_instruction.as_mut().unwrap();
+    match builder.mode.as_ref().unwrap() {
+        ModMode::MemNoDis => {
+            if let Some(RegisterMemoryEncoding::DIRECT) = builder.register_memory {
+                builder.displacement = Some([0, byte]);
+                machine.current_state = States::Byte4;
+            } else {
+                panic!("Not direct address, should not have byte 3.")
+            }
+        }
+        ModMode::Register => panic!("Invalid state"),
+        ModMode::Mem8Dis => {
+            builder.displacement = Some([0, byte]);
+            machine.current_state = States::Byte5;
+        }
+        ModMode::Mem16Dis => {
+            builder.displacement = Some([0, byte]);
+            machine.current_state = States::Byte4;
+        }
+    }
+}
+
+fn process_add_sub_cmp_immediate_register_b4(machine: &mut StateMachine, byte: u8) {
+    let builder = machine.current_instruction.as_mut().unwrap();
+    match builder.mode.as_ref().unwrap() {
+        ModMode::MemNoDis => {
+            if let Some(RegisterMemoryEncoding::DIRECT) = builder.register_memory {
+                let disp = builder.displacement.as_mut().unwrap();
+                disp[0] = byte;
+                machine.current_state = States::Byte5;
+            } else {
+                panic!();
+            }
+        }
+        ModMode::Mem8Dis | ModMode::Register => unreachable!("Invalid"),
+        ModMode::Mem16Dis => {
+            let disp = builder.displacement.as_mut().unwrap();
+            disp[0] = byte;
+            machine.current_state = States::Byte5;
+        }
+    }
+}
+
+fn process_add_sub_cmp_immediate_register_b5(machine: &mut StateMachine, byte: u8) {
+    let builder = machine.current_instruction.as_mut().unwrap();
+    builder.data = Some([0, byte]);
+    if !builder.sign_extension.unwrap() & builder.width.unwrap() {
+        machine.current_state = States::Byte6;
+    } else {
+        let final_builder = machine
+            .current_instruction
+            .replace(InstructionBuilder::new())
+            .unwrap();
+        let instruction = final_builder.build();
+        machine.instruction_buffer.push(instruction);
+        machine.current_state = States::Byte1;
+    }
+}
+
+fn process_add_sub_cmp_immediate_register_b6(machine: &mut StateMachine, byte: u8) {
+    let builder = machine.current_instruction.as_mut().unwrap();
+    let data = builder.data.as_mut().unwrap();
+    data[0] = byte;
+    let final_builder = machine
+        .current_instruction
+        .replace(InstructionBuilder::new())
+        .unwrap();
+    let instruction = final_builder.build();
+    machine.instruction_buffer.push(instruction);
+    machine.current_state = States::Byte1;
+}
+
+/// Standard way to process byte two for instructions with `mode reg r/m` as byte two.
+fn process_standard_b2(machine: &mut StateMachine, byte: u8) {
+    let builder = machine.current_instruction.as_mut().unwrap();
+    builder.mode = Some(ModMode::from_byte(byte));
+    let masked_register = (0b0011_1000 & byte) >> 3;
+    builder.register = Some(Register::from_byte(builder.width.unwrap(), masked_register));
+    match builder.mode.as_ref().unwrap() {
+        ModMode::MemNoDis => {
+            let masked_byte = 0b0000_0111 & byte;
+            builder.register_memory = Some(RegisterMemoryEncoding::from_byte(
+                ModMode::MemNoDis,
+                builder.width.unwrap(),
+                masked_byte,
+            ));
+            if let Some(RegisterMemoryEncoding::DIRECT) = builder.register_memory {
+                machine.current_state = States::Byte3;
+            } else {
+                let final_builder = machine
+                    .current_instruction
+                    .replace(InstructionBuilder::new())
+                    .unwrap();
+                let instruction = final_builder.build();
+                machine.instruction_buffer.push(instruction);
+                machine.current_state = States::Byte1;
+            }
+        }
+        ModMode::Mem8Dis => {
+            let masked_byte = 0b0000_0111 & byte;
+            builder.register_memory = Some(RegisterMemoryEncoding::from_byte(
+                ModMode::Mem8Dis,
+                builder.width.unwrap(),
+                masked_byte,
+            ));
+            machine.current_state = States::Byte3;
+        }
+        ModMode::Mem16Dis => {
+            let masked_byte = 0b0000_0111 & byte;
+            builder.register_memory = Some(RegisterMemoryEncoding::from_byte(
+                ModMode::Mem16Dis,
+                builder.width.unwrap(),
+                masked_byte,
+            ));
+            machine.current_state = States::Byte3;
+        }
+        ModMode::Register => {
+            let masked_byte = 0b0000_0111 & byte;
+            builder.register_memory = Some(RegisterMemoryEncoding::from_byte(
+                ModMode::Register,
+                builder.width.unwrap(),
                 masked_byte,
             ));
             let final_builder = machine
@@ -465,10 +909,18 @@ fn process_mov_r_b2(machine: &mut StateMachine, byte: u8) {
     }
 }
 
-fn process_mov_r_b3(machine: &mut StateMachine, byte: u8) {
+/// Standard way to process byte 3 which is normally `(DISP-LO)`
+fn process_standard_b3(machine: &mut StateMachine, byte: u8) {
     let builder = machine.current_instruction.as_mut().unwrap();
     match builder.mode.as_ref().unwrap() {
-        ModMode::MemNoDis => unimplemented!("Not handling direct address."),
+        ModMode::MemNoDis => {
+            if let Some(RegisterMemoryEncoding::DIRECT) = builder.register_memory {
+                builder.displacement = Some([0, byte]);
+                machine.current_state = States::Byte4;
+            } else {
+                panic!("Not direct address, should not have byte 3.")
+            }
+        }
         ModMode::Register => panic!("Invalid state"),
         ModMode::Mem8Dis => {
             builder.displacement = Some([0, byte]);
@@ -487,10 +939,26 @@ fn process_mov_r_b3(machine: &mut StateMachine, byte: u8) {
     }
 }
 
-fn process_mov_r_b4(machine: &mut StateMachine, byte: u8) {
+/// Standard way to process byte 4 which is normally `(DISP-HIGH)`
+fn process_standard_b4(machine: &mut StateMachine, byte: u8) {
     let builder = machine.current_instruction.as_mut().unwrap();
     match builder.mode.as_ref().unwrap() {
-        ModMode::MemNoDis | ModMode::Mem8Dis | ModMode::Register => unreachable!("Invalid"),
+        ModMode::MemNoDis => {
+            if let Some(RegisterMemoryEncoding::DIRECT) = builder.register_memory {
+                let disp = builder.displacement.as_mut().unwrap();
+                disp[0] = byte;
+                let final_builder = machine
+                    .current_instruction
+                    .replace(InstructionBuilder::new())
+                    .unwrap();
+                let instruction = final_builder.build();
+                machine.instruction_buffer.push(instruction);
+                machine.current_state = States::Byte1;
+            } else {
+                panic!("Not direct address, should not have byte 4.")
+            }
+        }
+        ModMode::Mem8Dis | ModMode::Register => unreachable!("Invalid"),
         ModMode::Mem16Dis => {
             let disp = builder.displacement.as_mut().unwrap();
             disp[0] = byte;
@@ -505,17 +973,29 @@ fn process_mov_r_b4(machine: &mut StateMachine, byte: u8) {
     }
 }
 
-fn process_mov_ir_b1(builder: &mut InstructionBuilder, byte: u8) {
+/*~~~~~~~~~~~~~~~~~~~~~~~~~~~Process Mov Specific Instructions~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
+
+fn process_mov_r_b1(machine: &mut StateMachine, byte: u8) {
+    let builder = machine.current_instruction.as_mut().unwrap();
+    builder.direction = Some(0b0000_0010 & byte == 2);
+    builder.width = Some(0b0000_0001 & byte == 1);
+    machine.current_state = States::Byte2;
+}
+
+fn process_mov_ir_b1(machine: &mut StateMachine, byte: u8) {
+    let builder = machine.current_instruction.as_mut().unwrap();
     let word_byte = ((0b0000_1000 & byte) >> 3) == 1;
     let masked_byte = 0b0000_0111 & byte;
     builder.register = Some(Register::from_byte(word_byte, masked_byte));
-    builder.word_byte = Some(word_byte);
+    builder.width = Some(word_byte);
+    machine.current_state = States::Byte2;
 }
 
+/// Also is used for other immediate to register instructions
 fn process_mov_ir_b2(machine: &mut StateMachine, byte: u8) {
     let builder = machine.current_instruction.as_mut().unwrap();
-    builder.displacement = Some([0, byte]);
-    if builder.word_byte.unwrap() {
+    builder.data = Some([0, byte]);
+    if builder.width.unwrap() {
         machine.current_state = States::Byte3;
     } else {
         let final_builder = machine
@@ -528,10 +1008,47 @@ fn process_mov_ir_b2(machine: &mut StateMachine, byte: u8) {
     }
 }
 
+/// Also is used for other immediate to register instructions
 fn process_mov_ir_b3(machine: &mut StateMachine, byte: u8) {
     let builder = machine.current_instruction.as_mut().unwrap();
-    let disp = builder.displacement.as_mut().unwrap();
-    disp[0] = byte;
+    let data = builder.data.as_mut().unwrap();
+    data[0] = byte;
+    let final_builder = machine
+        .current_instruction
+        .replace(InstructionBuilder::new())
+        .unwrap();
+    let instruction = final_builder.build();
+    machine.instruction_buffer.push(instruction);
+    machine.current_state = States::Byte1;
+}
+
+/*~~~~~~~~~~~~~~~~~~~~~Process Add Specific Instructions~~~~~~~~~~~~~~~~~~~~*/
+
+/// Also is used by Sub and CMP
+fn process_add_reg_mem_b1(machine: &mut StateMachine, byte: u8) {
+    let builder = machine.current_instruction.as_mut().unwrap();
+    let word_byte = (0b0000_0001 & byte) == 1;
+    let direction_byte = ((0b0000_0010 & byte) >> 1) == 1;
+    builder.width = Some(word_byte);
+    builder.direction = Some(direction_byte);
+    machine.current_state = States::Byte2;
+}
+
+fn process_add_sub_cmp_immediate_accumulator_b1(machine: &mut StateMachine, byte: u8) {
+    let builder = machine.current_instruction.as_mut().unwrap();
+    let word_byte = (0b0000_0001 & byte) == 1;
+    builder.width = Some(word_byte);
+    machine.current_state = States::Byte2;
+}
+
+fn process_jmp_b1(machine: &mut StateMachine, _byte: u8) {
+    machine.current_state = States::Byte2;
+}
+
+fn process_jmp_b2(machine: &mut StateMachine, byte: u8) {
+    let builder = machine.current_instruction.as_mut().unwrap();
+    // We reuse the first byte of the data field to store the signed increment.
+    builder.data = Some([0, byte]);
     let final_builder = machine
         .current_instruction
         .replace(InstructionBuilder::new())
@@ -548,6 +1065,8 @@ enum States {
     Byte2,
     Byte3,
     Byte4,
+    Byte5,
+    Byte6,
 }
 
 struct StateMachine {
@@ -569,11 +1088,21 @@ impl StateMachine {
         if self.current_instruction.is_none() {
             self.current_instruction = Some(InstructionBuilder::new());
         }
+
+        // TODO: Some debug prints
+        // for inst in self.instruction_buffer.iter() {
+        //     println!("{inst:?}");
+        //     println!("{inst}");
+        // }
+        // println!("----------------");
+
         match self.current_state {
             Byte1 => self.process_byte1(byte),
             Byte2 => self.process_byte2(byte),
             Byte3 => self.process_byte3(byte),
             Byte4 => self.process_byte4(byte),
+            Byte5 => self.process_byte5(byte),
+            Byte6 => self.process_byte6(byte),
         }
     }
     fn process_byte1(&mut self, byte: u8) {
@@ -585,37 +1114,158 @@ impl StateMachine {
         let opcode = match byte {
             0b1000_1000..=0b1000_1111 => MovR,
             0b1011_0000..=0b1011_1111 => MovIR,
+            0b0000_0000..=0b0000_0011 => AddRegMemory,
+            0b1000_0000..=0b1000_0011 => AddSubCmpImmediateRegister,
+            0b0000_0100..=0b0000_0101 => AddImmediateAccumulator,
+            0b0010_1000..=0b0010_1011 => SubRegMemory,
+            0b0010_1100..=0b0010_1101 => SubImmediateAccumulator,
+            0b0011_1000..=0b0011_1011 => CmpRegMemory,
+            0b0011_1100..=0b0011_1101 => CmpImmediateAccumulator,
+            0b0111_0100 => Je,
+            0b0111_1100 => Jl,
+            0b0111_1110 => Jle,
+            0b0111_0010 => Jb,
+            0b0111_0110 => Jbe,
+            0b0111_1010 => Jp,
+            0b0111_0000 => Jo,
+            0b0111_1000 => Js,
+            0b0111_0101 => Jne,
+            0b0111_1101 => Jnl,
+            0b0111_1111 => Jg,
+            0b0111_0011 => Jnb,
+            0b0111_0111 => Ja,
+            0b0111_1011 => Jnp,
+            0b0111_0001 => Jno,
+            0b0111_1001 => Jns,
+            0b1110_0010 => Loop,
+            0b1110_0001 => Loopz,
+            0b1110_0000 => Loopnz,
+            0b1110_0011 => Jcxz,
             x => unimplemented!("This opcode is not implemented: {:#010b}", x),
         };
         builder.opcode = Some(opcode);
         match opcode {
-            MovR => process_mov_r_b1(builder, byte),
-            MovIR => process_mov_ir_b1(builder, byte),
+            MovR => process_mov_r_b1(self, byte),
+            MovIR => process_mov_ir_b1(self, byte),
+            AddRegMemory | SubRegMemory | CmpRegMemory => process_add_reg_mem_b1(self, byte),
+            AddSubCmpImmediateRegister => process_add_sub_cmp_immediate_register_b1(self, byte),
+            AddImmediateAccumulator | SubImmediateAccumulator | CmpImmediateAccumulator => {
+                process_add_sub_cmp_immediate_accumulator_b1(self, byte)
+            }
+            Je => process_jmp_b1(self, byte),
+            Jl => process_jmp_b1(self, byte),
+            Jle => process_jmp_b1(self, byte),
+            Jb => process_jmp_b1(self, byte),
+            Jbe => process_jmp_b1(self, byte),
+            Jp => process_jmp_b1(self, byte),
+            Jo => process_jmp_b1(self, byte),
+            Js => process_jmp_b1(self, byte),
+            Jne => process_jmp_b1(self, byte),
+            Jnl => process_jmp_b1(self, byte),
+            Jg => process_jmp_b1(self, byte),
+            Jnb => process_jmp_b1(self, byte),
+            Ja => process_jmp_b1(self, byte),
+            Jnp => process_jmp_b1(self, byte),
+            Jno => process_jmp_b1(self, byte),
+            Jns => process_jmp_b1(self, byte),
+            Loop => process_jmp_b1(self, byte),
+            Loopz => process_jmp_b1(self, byte),
+            Loopnz => process_jmp_b1(self, byte),
+            Jcxz => process_jmp_b1(self, byte),
+            // None of these are known at byte 1.
+            AddImmediateRegister | SubImmediateRegister | CmpImmediateRegister => {
+                unreachable!("This opcode cannot known in byte 1.")
+            }
         }
-        self.current_state = States::Byte2;
     }
 
     fn process_byte2(&mut self, byte: u8) {
         let builder = self.current_instruction.as_ref().unwrap();
+        use OpCode::*;
         match builder.opcode.unwrap() {
-            OpCode::MovR => process_mov_r_b2(self, byte),
-            OpCode::MovIR => process_mov_ir_b2(self, byte),
+            MovR => process_standard_b2(self, byte),
+            MovIR => process_mov_ir_b2(self, byte),
+            AddRegMemory | SubRegMemory | CmpRegMemory => process_standard_b2(self, byte),
+            AddSubCmpImmediateRegister => process_add_sub_cmp_immediate_register_b2(self, byte),
+            AddImmediateAccumulator | SubImmediateAccumulator | CmpImmediateAccumulator => {
+                process_mov_ir_b2(self, byte)
+            }
+            Je => process_jmp_b2(self, byte),
+            Jl => process_jmp_b2(self, byte),
+            Jle => process_jmp_b2(self, byte),
+            Jb => process_jmp_b2(self, byte),
+            Jbe => process_jmp_b2(self, byte),
+            Jp => process_jmp_b2(self, byte),
+            Jo => process_jmp_b2(self, byte),
+            Js => process_jmp_b2(self, byte),
+            Jne => process_jmp_b2(self, byte),
+            Jnl => process_jmp_b2(self, byte),
+            Jg => process_jmp_b2(self, byte),
+            Jnb => process_jmp_b2(self, byte),
+            Ja => process_jmp_b2(self, byte),
+            Jnp => process_jmp_b2(self, byte),
+            Jno => process_jmp_b2(self, byte),
+            Jns => process_jmp_b2(self, byte),
+            Loop => process_jmp_b2(self, byte),
+            Loopz => process_jmp_b2(self, byte),
+            Loopnz => process_jmp_b2(self, byte),
+            Jcxz => process_jmp_b2(self, byte),
+            // None of these are known yet.
+            AddImmediateRegister | SubImmediateRegister | CmpImmediateRegister => {
+                unreachable!("This opcode cannot known in byte 2 yet.")
+            }
         }
     }
 
     fn process_byte3(&mut self, byte: u8) {
         let builder = self.current_instruction.as_ref().unwrap();
+        use OpCode::*;
         match builder.opcode.unwrap() {
-            OpCode::MovR => process_mov_r_b3(self, byte),
-            OpCode::MovIR => process_mov_ir_b3(self, byte),
+            MovR => process_standard_b3(self, byte),
+            MovIR => process_mov_ir_b3(self, byte),
+            AddRegMemory | SubRegMemory | CmpRegMemory => process_standard_b3(self, byte),
+            AddImmediateRegister | SubImmediateRegister | CmpImmediateRegister => {
+                process_add_sub_cmp_immediate_register_b3(self, byte)
+            }
+            AddImmediateAccumulator | SubImmediateAccumulator | CmpImmediateAccumulator => {
+                process_mov_ir_b3(self, byte)
+            }
+            x => unimplemented!("{x:?} is unimplemented on byte 3"),
         }
     }
 
     fn process_byte4(&mut self, byte: u8) {
         let builder = self.current_instruction.as_ref().unwrap();
+        use OpCode::*;
         match builder.opcode.unwrap() {
-            OpCode::MovR => process_mov_r_b4(self, byte),
-            OpCode::MovIR => unreachable!("Not possible"),
+            MovR => process_standard_b4(self, byte),
+            AddRegMemory | SubRegMemory | CmpRegMemory => process_standard_b4(self, byte),
+            AddImmediateRegister | SubImmediateRegister | CmpImmediateRegister => {
+                process_add_sub_cmp_immediate_register_b4(self, byte)
+            }
+            x => unimplemented!("{x:?} is unimplemented on byte 4"),
+        }
+    }
+
+    fn process_byte5(&mut self, byte: u8) {
+        let builder = self.current_instruction.as_ref().unwrap();
+        use OpCode::*;
+        match builder.opcode.unwrap() {
+            AddImmediateRegister | SubImmediateRegister | CmpImmediateRegister => {
+                process_add_sub_cmp_immediate_register_b5(self, byte)
+            }
+            x => unimplemented!("{x:?} is unimplemented on byte 5"),
+        }
+    }
+
+    fn process_byte6(&mut self, byte: u8) {
+        let builder = self.current_instruction.as_ref().unwrap();
+        use OpCode::*;
+        match builder.opcode.unwrap() {
+            AddImmediateRegister | SubImmediateRegister | CmpImmediateRegister => {
+                process_add_sub_cmp_immediate_register_b6(self, byte)
+            }
+            x => unimplemented!("{x:?} is unimplemented on byte 6"),
         }
     }
 
