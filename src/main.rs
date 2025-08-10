@@ -1,4 +1,4 @@
-use clap::Parser;
+use clap::{Parser, ValueEnum};
 use std::{
     fmt::Display,
     fs::File,
@@ -6,13 +6,26 @@ use std::{
     path::PathBuf,
 };
 
+use crate::simulator::{Register, run_simulation};
+
+mod simulator;
+
 /// Arguments to the program.
 #[derive(Parser, Debug)]
 struct Args {
+    /// Which mode to run.
+    #[arg(value_enum)]
+    mode: Mode,
     /// ASM input file.
     file: PathBuf,
     /// Output file.
     out: PathBuf,
+}
+
+#[derive(Copy, Clone, Debug, ValueEnum)]
+enum Mode {
+    Decomp,
+    Sim,
 }
 
 /*~~~~~~~~~~~~~~~~~~~~~~Instruction Structs~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
@@ -457,75 +470,6 @@ impl ModMode {
             0b1100_0000 => Self::Register,
             _ => unreachable!("data should always be masked."),
         }
-    }
-}
-
-#[derive(Debug)]
-enum Register {
-    AL,
-    CL,
-    DL,
-    BL,
-    AH,
-    CH,
-    DH,
-    BH,
-    AX,
-    CX,
-    DX,
-    BX,
-    SP,
-    BP,
-    SI,
-    DI,
-}
-
-impl Register {
-    pub fn from_byte(w_flag: bool, masked_byte: u8) -> Self {
-        use Register::*;
-        match (w_flag, masked_byte) {
-            (true, 0b0000_0000) => AX,
-            (false, 0b0000_0000) => AL,
-            (true, 0b0000_0001) => CX,
-            (false, 0b0000_0001) => CL,
-            (true, 0b0000_0010) => DX,
-            (false, 0b0000_0010) => DL,
-            (true, 0b0000_0011) => BX,
-            (false, 0b0000_0011) => BL,
-            (true, 0b0000_0100) => SP,
-            (false, 0b0000_0100) => AH,
-            (true, 0b0000_0101) => BP,
-            (false, 0b0000_0101) => CH,
-            (true, 0b0000_0110) => SI,
-            (false, 0b0000_0110) => DH,
-            (true, 0b0000_0111) => DI,
-            (false, 0b0000_0111) => BH,
-            (x, y) => unreachable!("all posbile masked values are covered: {x}, {y:#010b}"),
-        }
-    }
-}
-
-impl Display for Register {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let val = match self {
-            Register::AL => "al",
-            Register::CL => "cl",
-            Register::DL => "dl",
-            Register::BL => "bl",
-            Register::AH => "ah",
-            Register::CH => "ch",
-            Register::DH => "dh",
-            Register::BH => "bh",
-            Register::AX => "ax",
-            Register::CX => "cx",
-            Register::DX => "dx",
-            Register::BX => "bx",
-            Register::SP => "sp",
-            Register::BP => "bp",
-            Register::SI => "si",
-            Register::DI => "di",
-        };
-        write!(f, "{val}")
     }
 }
 
@@ -1290,10 +1234,18 @@ fn main() {
     let instructions = fsm.finalize();
 
     let mut out_file = std::fs::File::create(args.out).unwrap();
-    out_file.write_all(b"bits 16\n").unwrap();
+    match args.mode {
+        Mode::Decomp => {
+            out_file.write_all(b"bits 16\n").unwrap();
 
-    for inst in instructions {
-        println!("{inst:?}");
-        write!(&mut out_file, "\n{inst}").unwrap();
+            for inst in instructions {
+                println!("{inst:?}");
+                write!(&mut out_file, "\n{inst}").unwrap();
+            }
+        }
+        Mode::Sim => {
+            let regs = run_simulation(instructions);
+            write!(&mut out_file, "{regs}").unwrap();
+        }
     }
 }
