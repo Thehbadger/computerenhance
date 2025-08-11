@@ -32,7 +32,7 @@ enum Mode {
 #[derive(Debug)]
 enum Instruction {
     MovR(RegisterOp),
-    MovIR(Mov_IR),
+    MovIR(MovIrOp),
     AddRegMemory(RegisterOp),
     AddImmediateRegister(ImmediateOp),
     AddImmediateAccumulator(AccumulatorOp),
@@ -200,6 +200,7 @@ fn write_jmp(name: &str, instruction: &JmpOp, f: &mut std::fmt::Formatter<'_>) -
     write!(f, "{name} {}", instruction.inc)
 }
 
+#[allow(dead_code)]
 #[derive(Debug)]
 struct RegisterOp {
     direction: bool,
@@ -210,14 +211,15 @@ struct RegisterOp {
     displacement: Option<u16>,
 }
 
+#[allow(dead_code)]
 #[derive(Debug)]
-struct Mov_IR {
+struct MovIrOp {
     word_byte: bool,
     register: Register,
     data: u16,
 }
 
-// #[allow(dead_code)]
+#[allow(dead_code)]
 #[derive(Debug)]
 struct ImmediateOp {
     sign_extension: bool,
@@ -277,7 +279,7 @@ impl InstructionBuilder {
                 register_memory: self.register_memory.unwrap(),
                 displacement: self.displacement.map(u16::from_be_bytes),
             }),
-            OpCode::MovIR => MovIR(Mov_IR {
+            OpCode::MovIR => MovIR(MovIrOp {
                 word_byte: self.width.unwrap(),
                 register: self.register.unwrap(),
                 data: self.data.map(u16::from_be_bytes).unwrap(),
@@ -474,7 +476,7 @@ impl ModMode {
 }
 
 #[allow(clippy::upper_case_acronyms)]
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 enum RegisterMemoryEncoding {
     AL,
     AX,
@@ -1244,8 +1246,9 @@ fn main() {
             }
         }
         Mode::Sim => {
-            let regs = run_simulation(instructions);
-            write!(&mut out_file, "{regs}").unwrap();
+            let (regs, flags) = run_simulation(instructions);
+            write!(&mut out_file, "{regs}\n\n").unwrap();
+            write!(&mut out_file, "{flags}").unwrap()
         }
     }
 }
