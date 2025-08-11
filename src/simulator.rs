@@ -1,6 +1,27 @@
 use std::fmt::Display;
 
-use crate::{Instruction, Mov_IR, RegisterOp};
+use crate::{ImmediateOp, Instruction, MovIrOp, RegisterMemoryEncoding, RegisterOp};
+
+pub struct Flags {
+    /// Zero Flag
+    zf: bool,
+    /// Sign Flag
+    sf: bool,
+}
+
+impl Display for Flags {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "flags: ")?;
+        if self.zf {
+            write!(f, "PZ")?;
+        }
+
+        if self.sf {
+            write!(f, "S")?;
+        }
+        Ok(())
+    }
+}
 
 #[derive(Clone, Copy, Debug)]
 pub enum Register {
@@ -81,6 +102,34 @@ impl Display for Register {
             Register::U16Register(DI) => "di",
         };
         write!(f, "{val}")
+    }
+}
+
+impl TryFrom<RegisterMemoryEncoding> for Register {
+    type Error = String;
+
+    fn try_from(value: RegisterMemoryEncoding) -> Result<Self, Self::Error> {
+        use U8Register::*;
+        use U16Register::*;
+        match value {
+            RegisterMemoryEncoding::AL => Ok(Register::U8Register(AL)),
+            RegisterMemoryEncoding::AX => Ok(Register::U16Register(AX)),
+            RegisterMemoryEncoding::CL => Ok(Register::U8Register(CL)),
+            RegisterMemoryEncoding::CX => Ok(Register::U16Register(CX)),
+            RegisterMemoryEncoding::DL => Ok(Register::U8Register(DL)),
+            RegisterMemoryEncoding::DX => Ok(Register::U16Register(DX)),
+            RegisterMemoryEncoding::BL => Ok(Register::U8Register(BL)),
+            RegisterMemoryEncoding::BX => Ok(Register::U16Register(BX)),
+            RegisterMemoryEncoding::AH => Ok(Register::U8Register(AH)),
+            RegisterMemoryEncoding::SP => Ok(Register::U16Register(SP)),
+            RegisterMemoryEncoding::CH => Ok(Register::U8Register(CH)),
+            RegisterMemoryEncoding::BP => Ok(Register::U16Register(BP)),
+            RegisterMemoryEncoding::DH => Ok(Register::U8Register(DH)),
+            RegisterMemoryEncoding::SI => Ok(Register::U16Register(SI)),
+            RegisterMemoryEncoding::BH => Ok(Register::U8Register(BH)),
+            RegisterMemoryEncoding::DI => Ok(Register::U16Register(DI)),
+            x => Err(format!("{x} cannot be converted into a Register")),
+        }
     }
 }
 
@@ -215,22 +264,36 @@ impl SimulationRegisters {
     }
 }
 
-pub fn run_simulation(instructions: Vec<Instruction>) -> SimulationRegisters {
+pub fn run_simulation(instructions: Vec<Instruction>) -> (SimulationRegisters, Flags) {
     let mut registers = SimulationRegisters::new();
+    let mut flags = Flags {
+        zf: false,
+        sf: false,
+    };
     use Instruction::*;
     for inst in instructions {
         match inst {
-            MovR(registerOp) => sim_mov_r(&mut registers, &registerOp),
+            MovR(register_op) => sim_mov_r(&mut registers, &register_op),
             MovIR(mov_ir) => sim_mov_ir(&mut registers, &mov_ir),
-            _ => unimplemented!(),
+            SubRegMemory(register_op) => {
+                sim_sub_reg_memory(&mut flags, &mut registers, &register_op)
+            }
+            SubImmediateRegister(immediate_op) => {
+                sim_sub_immediate_register(&mut flags, &mut registers, &immediate_op)
+            }
+            AddImmediateRegister(immediate_op) => {
+                sim_add_immediate_register(&mut flags, &mut registers, &immediate_op)
+            }
+            CmpRegMemory(register_op) => sim_cmp_reg_memory(&mut flags, &registers, &register_op),
+            x => unimplemented!("Instruction {x} is not simulated."),
         }
     }
-    registers
+    (registers, flags)
 }
 
 /*~~~~~~~~~~~~~~~~~~~~~~Instruction Simulations~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
 
-fn sim_mov_ir(registers: &mut SimulationRegisters, inst: &Mov_IR) {
+fn sim_mov_ir(registers: &mut SimulationRegisters, inst: &MovIrOp) {
     match inst.register {
         Register::U8Register(reg) => registers.set_u8(reg, inst.data.try_into().unwrap()),
         Register::U16Register(reg) => registers.set_u16(reg, inst.data),
@@ -238,28 +301,8 @@ fn sim_mov_ir(registers: &mut SimulationRegisters, inst: &Mov_IR) {
 }
 
 fn sim_mov_r(registers: &mut SimulationRegisters, inst: &RegisterOp) {
-    use U8Register::*;
-    use U16Register::*;
     let source = inst.register;
-    let dest = match inst.register_memory {
-        crate::RegisterMemoryEncoding::AL => Register::U8Register(AL),
-        crate::RegisterMemoryEncoding::AX => Register::U16Register(AX),
-        crate::RegisterMemoryEncoding::CL => Register::U8Register(CL),
-        crate::RegisterMemoryEncoding::CX => Register::U16Register(CX),
-        crate::RegisterMemoryEncoding::DL => Register::U8Register(DL),
-        crate::RegisterMemoryEncoding::DX => Register::U16Register(DX),
-        crate::RegisterMemoryEncoding::BL => Register::U8Register(BL),
-        crate::RegisterMemoryEncoding::BX => Register::U16Register(BX),
-        crate::RegisterMemoryEncoding::AH => Register::U8Register(AH),
-        crate::RegisterMemoryEncoding::SP => Register::U16Register(SP),
-        crate::RegisterMemoryEncoding::CH => Register::U8Register(CH),
-        crate::RegisterMemoryEncoding::BP => Register::U16Register(BP),
-        crate::RegisterMemoryEncoding::DH => Register::U8Register(DH),
-        crate::RegisterMemoryEncoding::SI => Register::U16Register(SI),
-        crate::RegisterMemoryEncoding::BH => Register::U8Register(BH),
-        crate::RegisterMemoryEncoding::DI => Register::U16Register(DI),
-        _ => unreachable!(),
-    };
+    let dest: Register = inst.register_memory.try_into().unwrap();
 
     if !inst.direction {
         use Register::*;
@@ -302,4 +345,97 @@ fn sim_mov_r(registers: &mut SimulationRegisters, inst: &RegisterOp) {
             }
         }
     }
+}
+
+fn sim_sub_reg_memory(flags: &mut Flags, registers: &mut SimulationRegisters, inst: &RegisterOp) {
+    let src = inst.register;
+    let dest: Register = inst.register_memory.try_into().unwrap();
+    use Register::*;
+    match src {
+        U8Register(_) => unimplemented!("sim_sub_reg_memory not implemented for u8 registers."),
+        U16Register(src_reg) => {
+            let src_value = registers.get_u16(src_reg);
+            match dest {
+                U8Register(_) => {
+                    unreachable!("Can't sub with a source of 16 bit and dest of 8 bit.")
+                }
+                U16Register(dest_reg) => {
+                    let dest_value = registers.get_u16(dest_reg);
+                    let (result, _) = dest_value.overflowing_sub(src_value);
+                    calc_flags_u16(flags, result);
+                    registers.set_u16(dest_reg, result);
+                }
+            }
+        }
+    }
+}
+
+fn sim_sub_immediate_register(
+    flags: &mut Flags,
+    registers: &mut SimulationRegisters,
+    inst: &ImmediateOp,
+) {
+    let dest: Register = inst.registery_memory.try_into().unwrap();
+    let value = inst.data;
+    use Register::*;
+    match dest {
+        U8Register(_) => {
+            unimplemented!("sim_sub_immediate_register not implemented for 8 bit registers.")
+        }
+        U16Register(dest_reg) => {
+            let dest_value = registers.get_u16(dest_reg);
+            let (result, _) = dest_value.overflowing_sub(value);
+            calc_flags_u16(flags, result);
+            registers.set_u16(dest_reg, result);
+        }
+    }
+}
+
+fn sim_add_immediate_register(
+    flags: &mut Flags,
+    registers: &mut SimulationRegisters,
+    inst: &ImmediateOp,
+) {
+    let dest: Register = inst.registery_memory.try_into().unwrap();
+    let value = inst.data;
+    use Register::*;
+    match dest {
+        U8Register(_) => {
+            unimplemented!("sim_add_immediate_register not implemented for 8 bit registers.")
+        }
+        U16Register(dest_reg) => {
+            let dest_value = registers.get_u16(dest_reg);
+            let (result, _) = dest_value.overflowing_add(value);
+            calc_flags_u16(flags, result);
+            registers.set_u16(dest_reg, result);
+        }
+    }
+}
+
+fn sim_cmp_reg_memory(flags: &mut Flags, registers: &SimulationRegisters, inst: &RegisterOp) {
+    let src = inst.register;
+    let dest: Register = inst.register_memory.try_into().unwrap();
+    use Register::*;
+    match src {
+        U8Register(_) => unimplemented!("sim_cmp_reg_memory not implemented for u8 registers."),
+        U16Register(src_reg) => {
+            let src_value = registers.get_u16(src_reg);
+            match dest {
+                U8Register(_) => {
+                    unreachable!("Can't sub with a source of 16 bit and dest of 8 bit.")
+                }
+                U16Register(dest_reg) => {
+                    let dest_value = registers.get_u16(dest_reg);
+                    let (result, _) = dest_value.overflowing_sub(src_value);
+                    calc_flags_u16(flags, result);
+                }
+            }
+        }
+    }
+}
+
+/*~~~~~~~~~~~~~~Util Functions~~~~~~~~~~~~~~~~~~*/
+fn calc_flags_u16(flags: &mut Flags, value: u16) {
+    flags.zf = value == 0;
+    flags.sf = (value.to_le_bytes()[1] & 0b0000_0001) == 0b0000_0001;
 }
