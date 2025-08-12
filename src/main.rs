@@ -775,7 +775,9 @@ fn process_add_sub_cmp_immediate_register_b5(machine: &mut StateMachine, byte: u
             .replace(InstructionBuilder::new())
             .unwrap();
         let instruction = final_builder.build();
-        machine.instruction_buffer.push(instruction);
+        machine
+            .instruction_buffer
+            .push((machine.current_byte, instruction));
         machine.current_state = States::Byte1;
     }
 }
@@ -789,7 +791,9 @@ fn process_add_sub_cmp_immediate_register_b6(machine: &mut StateMachine, byte: u
         .replace(InstructionBuilder::new())
         .unwrap();
     let instruction = final_builder.build();
-    machine.instruction_buffer.push(instruction);
+    machine
+        .instruction_buffer
+        .push((machine.current_byte, instruction));
     machine.current_state = States::Byte1;
 }
 
@@ -815,7 +819,9 @@ fn process_standard_b2(machine: &mut StateMachine, byte: u8) {
                     .replace(InstructionBuilder::new())
                     .unwrap();
                 let instruction = final_builder.build();
-                machine.instruction_buffer.push(instruction);
+                machine
+                    .instruction_buffer
+                    .push((machine.current_byte, instruction));
                 machine.current_state = States::Byte1;
             }
         }
@@ -849,7 +855,9 @@ fn process_standard_b2(machine: &mut StateMachine, byte: u8) {
                 .replace(InstructionBuilder::new())
                 .unwrap();
             let instruction = final_builder.build();
-            machine.instruction_buffer.push(instruction);
+            machine
+                .instruction_buffer
+                .push((machine.current_byte, instruction));
             machine.current_state = States::Byte1;
         }
     }
@@ -875,7 +883,9 @@ fn process_standard_b3(machine: &mut StateMachine, byte: u8) {
                 .replace(InstructionBuilder::new())
                 .unwrap();
             let instruction = final_builder.build();
-            machine.instruction_buffer.push(instruction);
+            machine
+                .instruction_buffer
+                .push((machine.current_byte, instruction));
             machine.current_state = States::Byte1;
         }
         ModMode::Mem16Dis => {
@@ -898,7 +908,9 @@ fn process_standard_b4(machine: &mut StateMachine, byte: u8) {
                     .replace(InstructionBuilder::new())
                     .unwrap();
                 let instruction = final_builder.build();
-                machine.instruction_buffer.push(instruction);
+                machine
+                    .instruction_buffer
+                    .push((machine.current_byte, instruction));
                 machine.current_state = States::Byte1;
             } else {
                 panic!("Not direct address, should not have byte 4.")
@@ -913,7 +925,9 @@ fn process_standard_b4(machine: &mut StateMachine, byte: u8) {
                 .replace(InstructionBuilder::new())
                 .unwrap();
             let instruction = final_builder.build();
-            machine.instruction_buffer.push(instruction);
+            machine
+                .instruction_buffer
+                .push((machine.current_byte, instruction));
             machine.current_state = States::Byte1;
         }
     }
@@ -949,7 +963,9 @@ fn process_mov_ir_b2(machine: &mut StateMachine, byte: u8) {
             .replace(InstructionBuilder::new())
             .unwrap();
         let instruction = final_builder.build();
-        machine.instruction_buffer.push(instruction);
+        machine
+            .instruction_buffer
+            .push((machine.current_byte, instruction));
         machine.current_state = States::Byte1;
     }
 }
@@ -964,7 +980,9 @@ fn process_mov_ir_b3(machine: &mut StateMachine, byte: u8) {
         .replace(InstructionBuilder::new())
         .unwrap();
     let instruction = final_builder.build();
-    machine.instruction_buffer.push(instruction);
+    machine
+        .instruction_buffer
+        .push((machine.current_byte, instruction));
     machine.current_state = States::Byte1;
 }
 
@@ -1000,7 +1018,9 @@ fn process_jmp_b2(machine: &mut StateMachine, byte: u8) {
         .replace(InstructionBuilder::new())
         .unwrap();
     let instruction = final_builder.build();
-    machine.instruction_buffer.push(instruction);
+    machine
+        .instruction_buffer
+        .push((machine.current_byte, instruction));
     machine.current_state = States::Byte1;
 }
 
@@ -1017,19 +1037,22 @@ enum States {
 
 struct StateMachine {
     current_state: States,
+    current_byte: u16,
     current_instruction: Option<InstructionBuilder>,
-    instruction_buffer: Vec<Instruction>,
+    instruction_buffer: Vec<(u16, Instruction)>,
 }
 
 impl StateMachine {
     pub fn new() -> Self {
         Self {
             current_state: States::Byte1,
+            current_byte: 0,
             current_instruction: None,
             instruction_buffer: Vec::new(),
         }
     }
     pub fn process_input(&mut self, byte: u8) {
+        self.current_byte += 1;
         use States::*;
         if self.current_instruction.is_none() {
             self.current_instruction = Some(InstructionBuilder::new());
@@ -1215,7 +1238,7 @@ impl StateMachine {
         }
     }
 
-    pub fn finalize(self) -> Vec<Instruction> {
+    pub fn finalize(self) -> Vec<(u16, Instruction)> {
         self.instruction_buffer
     }
 }
@@ -1242,7 +1265,7 @@ fn main() {
 
             for inst in instructions {
                 println!("{inst:?}");
-                write!(&mut out_file, "\n{inst}").unwrap();
+                write!(&mut out_file, "\n{}", inst.1).unwrap();
             }
         }
         Mode::Sim => {
