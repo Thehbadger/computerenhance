@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use crate::{ImmediateOp, Instruction, MovIrOp, RegisterMemoryEncoding, RegisterOp};
+use crate::{ImmediateOp, Instruction, JmpOp, MovIrOp, RegisterMemoryEncoding, RegisterOp};
 
 pub struct Flags {
     /// Zero Flag
@@ -142,6 +142,7 @@ pub struct SimulationRegisters {
     bp: [u8; 2],
     si: [u8; 2],
     di: [u8; 2],
+    ip: u16,
 }
 
 impl Display for SimulationRegisters {
@@ -193,7 +194,8 @@ impl Display for SimulationRegisters {
             "di: {:#06x} ({})\n",
             u16::from_le_bytes(self.di),
             u16::from_le_bytes(self.di)
-        )
+        )?;
+        write!(f, "ip: {:#06x} ({})\n", self.ip, self.ip)
     }
 }
 
@@ -208,6 +210,7 @@ impl SimulationRegisters {
             bp: [0; 2],
             si: [0; 2],
             di: [0; 2],
+            ip: 0,
         }
     }
 
@@ -264,14 +267,16 @@ impl SimulationRegisters {
     }
 }
 
-pub fn run_simulation(instructions: Vec<Instruction>) -> (SimulationRegisters, Flags) {
+pub fn run_simulation(instructions: Vec<(u16, Instruction)>) -> (SimulationRegisters, Flags) {
     let mut registers = SimulationRegisters::new();
     let mut flags = Flags {
         zf: false,
         sf: false,
     };
     use Instruction::*;
-    for inst in instructions {
+    let mut index = 0;
+    while let Some((pos, inst)) = instructions.get(index) {
+        registers.ip = *pos;
         match inst {
             MovR(register_op) => sim_mov_r(&mut registers, &register_op),
             MovIR(mov_ir) => sim_mov_ir(&mut registers, &mov_ir),
@@ -285,8 +290,10 @@ pub fn run_simulation(instructions: Vec<Instruction>) -> (SimulationRegisters, F
                 sim_add_immediate_register(&mut flags, &mut registers, &immediate_op)
             }
             CmpRegMemory(register_op) => sim_cmp_reg_memory(&mut flags, &registers, &register_op),
+            Jne(jmp_op) => sim_jne(&mut flags, &jmp_op, &mut index, *pos, &instructions),
             x => unimplemented!("Instruction {x} is not simulated."),
         }
+        index += 1;
     }
     (registers, flags)
 }
@@ -434,8 +441,37 @@ fn sim_cmp_reg_memory(flags: &mut Flags, registers: &SimulationRegisters, inst: 
     }
 }
 
+fn sim_jne(
+    flags: &mut Flags,
+    inst: &JmpOp,
+    index: &mut usize,
+    current_pos: u16,
+    instructions: &Vec<(u16, Instruction)>,
+) {
+    if !flags.zf {
+        if let Some(new_index) = find_pos(inst.inc, current_pos, instructions) {
+            *index = new_index;
+        }
+    }
+}
+
 /*~~~~~~~~~~~~~~Util Functions~~~~~~~~~~~~~~~~~~*/
 fn calc_flags_u16(flags: &mut Flags, value: u16) {
     flags.zf = value == 0;
     flags.sf = (value.to_le_bytes()[1] & 0b0000_0001) == 0b0000_0001;
+}
+
+/// Because I did a terrible job with architecture forsight, `jmp` instructions provide byte offsets, but we have a `Vec` with numbered indexes. The correct offset is stored, so we need to just do a linear scan of the vector and find it. This isn't really performant, but we got small numbers of instructions.
+fn find_pos(
+    jmp_offset: i8,
+    current_pos: u16,
+    instructions: &Vec<(u16, Instruction)>,
+) -> Option<usize> {
+    let target_offset = current_pos.wrapping_add_signed(jmp_offset as i16);
+    for (new_index, (offset, _inst)) in instructions.iter().enumerate() {
+        if *offset == target_offset {
+            return Some(new_index);
+        }
+    }
+    None
 }
