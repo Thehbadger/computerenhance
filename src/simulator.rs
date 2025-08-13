@@ -1,6 +1,23 @@
-use std::fmt::Display;
+use std::{collections::HashMap, fmt::Display};
 
 use crate::{ImmediateOp, Instruction, JmpOp, MovIrOp, RegisterMemoryEncoding, RegisterOp};
+
+/// This is a pretty hacky representation of memory. I didn't feel like having a bunch of real memory and since each address in memory is essentially a unique key, we can use a map. We have to write some helper functions to make sure return 0 when the memory is empty, but otherwise this is slick for low amounts of information. HEHE this is kind of virtual memory.
+pub struct Memory(HashMap<u16, u8>);
+
+impl Memory {
+    pub fn new() -> Self {
+        Memory(HashMap::new())
+    }
+
+    pub fn store_u8(&mut self, address: u16, value: u8) {
+        self.0.insert(address, value);
+    }
+
+    pub fn load_u8(&self, address: u16) -> u8 {
+        *self.0.get(&address).unwrap_or(&0)
+    }
+}
 
 pub struct Flags {
     /// Zero Flag
@@ -273,6 +290,7 @@ pub fn run_simulation(instructions: Vec<(u16, Instruction)>) -> (SimulationRegis
         zf: false,
         sf: false,
     };
+    let mut memory = Memory::new();
     use Instruction::*;
     let mut index = 0;
     while let Some((pos, inst)) = instructions.get(index) {
