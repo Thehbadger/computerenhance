@@ -33,6 +33,7 @@ enum Mode {
 enum Instruction {
     MovR(RegisterOp),
     MovIR(MovIrOp),
+    MovIRM(ImmediateOp),
     AddRegMemory(RegisterOp),
     AddImmediateRegister(ImmediateOp),
     AddImmediateAccumulator(AccumulatorOp),
@@ -416,6 +417,7 @@ enum OpCode {
     // Movs
     MovR,
     MovIR,
+    MovIRM,
     // Adds
     AddRegMemory,
     /// Add, Sub, Cmp to IR are all the same at the first byte.
@@ -951,6 +953,13 @@ fn process_mov_ir_b1(machine: &mut StateMachine, byte: u8) {
     machine.current_state = States::Byte2;
 }
 
+fn process_mov_irm_b1(machine: &mut StateMachine, byte: u8) {
+    let builder = machine.current_instruction.as_mut().unwrap();
+    let word_byte = (0b0000_0001 & byte) == 1;
+    builder.width = Some(word_byte);
+    machine.current_state = States::Byte2;
+}
+
 /// Also is used for other immediate to register instructions
 fn process_mov_ir_b2(machine: &mut StateMachine, byte: u8) {
     let builder = machine.current_instruction.as_mut().unwrap();
@@ -968,6 +977,134 @@ fn process_mov_ir_b2(machine: &mut StateMachine, byte: u8) {
             .push((machine.current_byte, instruction));
         machine.current_state = States::Byte1;
     }
+}
+
+/// `mode 000 r/m` very similar to `process_standard_b2` except no reg field.
+fn process_mov_irm_b2(machine: &mut StateMachine, byte: u8) {
+    let builder = machine.current_instruction.as_mut().unwrap();
+    builder.mode = Some(ModMode::from_byte(byte));
+
+    match builder.mode.as_ref().unwrap() {
+        ModMode::MemNoDis => {
+            let masked_byte = 0b0000_0111 & byte;
+            builder.register_memory = Some(RegisterMemoryEncoding::from_byte(
+                ModMode::MemNoDis,
+                builder.width.unwrap(),
+                masked_byte,
+            ));
+            if let Some(RegisterMemoryEncoding::DIRECT) = builder.register_memory {
+                machine.current_state = States::Byte3;
+            } else {
+                machine.current_state = States::Byte5;
+            }
+        }
+        ModMode::Mem8Dis => {
+            let masked_byte = 0b0000_0111 & byte;
+            builder.register_memory = Some(RegisterMemoryEncoding::from_byte(
+                ModMode::Mem8Dis,
+                builder.width.unwrap(),
+                masked_byte,
+            ));
+            machine.current_state = States::Byte3;
+        }
+        ModMode::Mem16Dis => {
+            let masked_byte = 0b0000_0111 & byte;
+            builder.register_memory = Some(RegisterMemoryEncoding::from_byte(
+                ModMode::Mem16Dis,
+                builder.width.unwrap(),
+                masked_byte,
+            ));
+            machine.current_state = States::Byte3;
+        }
+        ModMode::Register => {
+            let masked_byte = 0b0000_0111 & byte;
+            builder.register_memory = Some(RegisterMemoryEncoding::from_byte(
+                ModMode::Register,
+                builder.width.unwrap(),
+                masked_byte,
+            ));
+            machine.current_state = States::Byte5;
+        }
+    }
+}
+
+/// Process byte 3 which is normally `(DISP-LO)`
+fn process_mov_irm_b3(machine: &mut StateMachine, byte: u8) {
+    let builder = machine.current_instruction.as_mut().unwrap();
+    match builder.mode.as_ref().unwrap() {
+        ModMode::MemNoDis => {
+            if let Some(RegisterMemoryEncoding::DIRECT) = builder.register_memory {
+                builder.displacement = Some([0, byte]);
+                machine.current_state = States::Byte4;
+            } else {
+                panic!("Not direct address, should not have byte 3.")
+            }
+        }
+        ModMode::Register => panic!("Invalid State"),
+        ModMode::Mem8Dis => {
+            builder.displacement = Some([0, byte]);
+            machine.current_state = States::Byte5;
+        }
+        ModMode::Mem16Dis => {
+            builder.displacement = Some([0, byte]);
+            machine.current_state = States::Byte4;
+        }
+    }
+}
+
+/// Process byte 4 which is normally `(DISP-HIGH)`
+fn process_mov_irm_b4(machine: &mut StateMachine, byte: u8) {
+    let builder = machine.current_instruction.as_mut().unwrap();
+    match builder.mode.as_ref().unwrap() {
+        ModMode::MemNoDis => {
+            if let Some(RegisterMemoryEncoding::DIRECT) = builder.register_memory {
+                let disp = builder.displacement.as_mut().unwrap();
+                disp[0] = byte;
+                machine.current_state = States::Byte5;
+            } else {
+                panic!();
+            }
+        }
+        ModMode::Mem8Dis | ModMode::Register => unreachable!("Invalid"),
+        ModMode::Mem16Dis => {
+            let disp = builder.displacement.as_mut().unwrap();
+            disp[0] = byte;
+            machine.current_state = States::Byte5;
+        }
+    }
+}
+
+fn process_mov_irm_b5(machine: &mut StateMachine, byte: u8) {
+    let builder = machine.current_instruction.as_mut().unwrap();
+    builder.data = Some([0, byte]);
+    if !builder.sign_extension.unwrap() & builder.width.unwrap() {
+        machine.current_state = States::Byte6;
+    } else {
+        let final_builder = machine
+            .current_instruction
+            .replace(InstructionBuilder::new())
+            .unwrap();
+        let instruction = final_builder.build();
+        machine
+            .instruction_buffer
+            .push((machine.current_byte, instruction));
+        machine.current_state = States::Byte1;
+    }
+}
+
+fn process_mov_irm_b6(machine: &mut StateMachine, byte: u8) {
+    let builder = machine.current_instruction.as_mut().unwrap();
+    let data = builder.data.as_mut().unwrap();
+    data[0] = byte;
+    let final_builder = machine
+        .current_instruction
+        .replace(InstructionBuilder::new())
+        .unwrap();
+    let instruction = final_builder.build();
+    machine
+        .instruction_buffer
+        .push((machine.current_byte, instruction));
+    machine.current_state = States::Byte1;
 }
 
 /// Also is used for other immediate to register instructions
@@ -1059,11 +1196,11 @@ impl StateMachine {
         }
 
         // TODO: Some debug prints
-        // for inst in self.instruction_buffer.iter() {
-        //     println!("{inst:?}");
-        //     println!("{inst}");
-        // }
-        // println!("----------------");
+        for inst in self.instruction_buffer.iter() {
+            println!("{inst:?}");
+            // println!("{inst}");
+        }
+        println!("----------------");
 
         match self.current_state {
             Byte1 => self.process_byte1(byte),
@@ -1080,8 +1217,10 @@ impl StateMachine {
             .as_mut()
             .expect("fsm always initializes");
         use OpCode::*;
+        // TODO: Implement Mov Immediate to memory/register.
         let opcode = match byte {
             0b1000_1000..=0b1000_1111 => MovR,
+            0b1100_0110..=0b1100_0111 => MovIRM,
             0b1011_0000..=0b1011_1111 => MovIR,
             0b0000_0000..=0b0000_0011 => AddRegMemory,
             0b1000_0000..=0b1000_0011 => AddSubCmpImmediateRegister,
@@ -1121,6 +1260,7 @@ impl StateMachine {
             AddImmediateAccumulator | SubImmediateAccumulator | CmpImmediateAccumulator => {
                 process_add_sub_cmp_immediate_accumulator_b1(self, byte)
             }
+            MovIRM => process_mov_irm_b1(self, byte),
             Je => process_jmp_b1(self, byte),
             Jl => process_jmp_b1(self, byte),
             Jle => process_jmp_b1(self, byte),
@@ -1154,6 +1294,7 @@ impl StateMachine {
         match builder.opcode.unwrap() {
             MovR => process_standard_b2(self, byte),
             MovIR => process_mov_ir_b2(self, byte),
+            MovIRM => process_mov_irm_b2(self, byte),
             AddRegMemory | SubRegMemory | CmpRegMemory => process_standard_b2(self, byte),
             AddSubCmpImmediateRegister => process_add_sub_cmp_immediate_register_b2(self, byte),
             AddImmediateAccumulator | SubImmediateAccumulator | CmpImmediateAccumulator => {
@@ -1192,6 +1333,7 @@ impl StateMachine {
         match builder.opcode.unwrap() {
             MovR => process_standard_b3(self, byte),
             MovIR => process_mov_ir_b3(self, byte),
+            MovIRM => process_mov_irm_b3(self, byte),
             AddRegMemory | SubRegMemory | CmpRegMemory => process_standard_b3(self, byte),
             AddImmediateRegister | SubImmediateRegister | CmpImmediateRegister => {
                 process_add_sub_cmp_immediate_register_b3(self, byte)
@@ -1208,6 +1350,7 @@ impl StateMachine {
         use OpCode::*;
         match builder.opcode.unwrap() {
             MovR => process_standard_b4(self, byte),
+            MovIRM => process_mov_irm_b4(self, byte),
             AddRegMemory | SubRegMemory | CmpRegMemory => process_standard_b4(self, byte),
             AddImmediateRegister | SubImmediateRegister | CmpImmediateRegister => {
                 process_add_sub_cmp_immediate_register_b4(self, byte)
@@ -1220,6 +1363,7 @@ impl StateMachine {
         let builder = self.current_instruction.as_ref().unwrap();
         use OpCode::*;
         match builder.opcode.unwrap() {
+            MovIRM => process_mov_irm_b5(self, byte),
             AddImmediateRegister | SubImmediateRegister | CmpImmediateRegister => {
                 process_add_sub_cmp_immediate_register_b5(self, byte)
             }
